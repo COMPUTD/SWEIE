@@ -1,56 +1,43 @@
-from django.core.exceptions import ImproperlyConfigured
-from django.http import HttpResponseRedirect
+from django.forms import Form
+from django.shortcuts import render, redirect
+from django.views import View
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic.edit import FormView
+from django.contrib import messages
+from django import forms
+from django.utils.translation import gettext as _
 
 
-class FormView:
-    """Render a form on GET and processes it on POST."""
+class clientdetailsform(Form):
+    first_name = forms.CharField(label=_('Your Name'), max_length=100)
+    email = forms.EmailField(label=_('Your Email'))
 
-    def get(self, request, *args, **kwargs):
-        """Handle GET requests: instantiate a blank version of the form."""
-        return self.render_to_response(self.get_context_data())
 
-    def post(self, request, *args, **kwargs):
-        """
-        Handle POST requests: instantiate a form instance with the passed
-        POST variables and then check if it's valid.
-        """
-        form = self.get_form()
-        if form.is_valid():
-            return self.form_valid(form)
+class UpdateClientDetailsFormView(LoginRequiredMixin, FormView):
+    template_name = 'my_enhanced_template.html'
+    form_class = clientdetailsform
+    success_url = '/successs/'
+
+    def form_valid(self, form:clientdetailsform):
+        # Get the name and email from the form
+        name = self.request.POST.get('name', None)
+        email = self.request.POST.get('email', None)
+
+        # Create and save a new Client object with the name and email
+        if name:
+            Client.objects.create(name=name, email=email)
+
+            # Set a success message
+            messages.success(self.request, "Your details were saved successfully!")
         else:
-            return self.form_invalid(form)
-
-    def get_form(self):
-        """Return an instance of the form to be used in this view."""
-        return self.form_class(**self.get_form_kwargs())
-
-    def get_form_kwargs(self):
-        """Return the keyword arguments for instantiating the form."""
-
-        if self.request.method in ("POST", "PUT"):
-            return {
-                "data": self.request.POST,
-                "files": self.request.FILES,
-            }
-
-        return {}
-
-    def form_valid(self, form):
-        """If the form is valid, redirect to the supplied URL."""
-        return HttpResponseRedirect(self.get_success_url())
-
-    def form_invalid(self, form):
-        """If the form is invalid, render the invalid form."""
-        return self.render_to_response(self.get_context_data(form=form))
-
-    def get_success_url(self):
-        """Return the URL to redirect to after processing a valid form."""
-        if not self.success_url:
-            raise ImproperlyConfigured("No URL to redirect to. Provide a success_url.")
-        return str(self.success_url)  # success_url may be lazy
+            messages.warning(self.request, "You did not fill in any information!")
+        # Redirect to the specified success URL
+        return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
-        """Insert the form into the context dict."""
-        if "form" not in kwargs:
-            kwargs["form"] = self.get_form()
-        return super().get_context_data(**kwargs)
+        context = {}
+        context['user_greeting'] = _(f'Hello, {self.request.user.username}!')
+        return context
+
+    def form_invalid(self, form):
+        return super().form_invalid(form)
